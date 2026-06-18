@@ -1,7 +1,8 @@
-"""PySide6 GUI interface for ChaBiao - fast interactive spreadsheet viewer."""
+"""PySide6 GUI interface for ChaBiao — with i18n and theme support."""
 
 from __future__ import annotations
 
+import json
 import sys
 from pathlib import Path
 from typing import Any
@@ -10,6 +11,30 @@ import pandas as pd
 
 from .__version__ import __version__
 from .core import SheetWorkbook, load_workbook
+from .i18n import SUPPORTED_LANGS, detect_system_lang, t
+from .theme import DARK_QSS, LIGHT_QSS, SPOTLIGHT_COLORS, THEMES
+
+_CONFIG_DIR = Path.home() / ".chabiao"
+_CONFIG_FILE = _CONFIG_DIR / "gui_config.json"
+
+PAGE_SIZE = 500
+
+
+def _load_config() -> dict[str, Any]:
+    try:
+        if _CONFIG_FILE.exists():
+            return json.loads(_CONFIG_FILE.read_text())
+    except Exception:
+        pass
+    return {}
+
+
+def _save_config(cfg: dict[str, Any]) -> None:
+    try:
+        _CONFIG_DIR.mkdir(exist_ok=True)
+        _CONFIG_FILE.write_text(json.dumps(cfg, indent=2))
+    except Exception:
+        pass
 
 
 def _import_pyside6():
@@ -19,50 +44,6 @@ def _import_pyside6():
     except ImportError:
         print("PySide6 is required for GUI mode. Install with: pip install chabiao[gui]")
         sys.exit(1)
-
-
-PAGE_SIZE = 500
-
-_STYLESHEET = """
-QMainWindow { background: #f8f9fa; }
-QLabel { color: #333; }
-QPushButton {
-    background: #1976D2; color: white; border: none;
-    padding: 5px 14px; border-radius: 4px; font-size: 13px;
-}
-QPushButton:hover { background: #1565C0; }
-QPushButton:pressed { background: #0D47A1; }
-QPushButton#clearBtn {
-    background: #78909C; color: white;
-}
-QPushButton#clearBtn:hover { background: #607D8B; }
-QPushButton#pageBtn {
-    background: #e0e0e0; color: #333; padding: 3px 10px;
-}
-QPushButton#pageBtn:hover { background: #bdbdbd; }
-QComboBox {
-    padding: 4px 8px; border: 1px solid #ccc; border-radius: 4px;
-    background: white; min-width: 100px;
-}
-QLineEdit {
-    padding: 4px 8px; border: 1px solid #ccc; border-radius: 4px;
-    background: white;
-}
-QTableWidget {
-    gridline-color: #e0e0e0; border: 1px solid #ddd;
-    selection-background-color: #BBDEFB;
-}
-QHeaderView::section {
-    background: #1976D2; color: white; padding: 6px 10px;
-    border: none; font-weight: 500;
-}
-QStatusBar { background: #f5f5f5; color: #666; }
-QTabBar::tab {
-    background: #e0e0e0; padding: 6px 16px; border-top-left-radius: 4px;
-    border-top-right-radius: 4px; margin-right: 2px;
-}
-QTabBar::tab:selected { background: white; font-weight: bold; }
-"""
 
 
 class SpreadsheetModel:
@@ -113,15 +94,20 @@ class SpreadsheetModel:
 
 
 class ChaBiaoWindow:
-    """Main application window for ChaBiao GUI."""
+    """Main application window for ChaBiao GUI with i18n and theme support."""
 
     def __init__(self) -> None:
         QtWidgets, QtCore, QtGui = _import_pyside6()
 
+        cfg = _load_config()
+        self._lang = cfg.get("lang", detect_system_lang())
+        self._theme = cfg.get("theme", "light")
+
         self.app = QtWidgets.QApplication(sys.argv)
-        self.app.setStyleSheet(_STYLESHEET)
+        self._apply_theme()
+
         self.window = QtWidgets.QMainWindow()
-        self.window.setWindowTitle(f"ChaBiao 查表 v{__version__}")
+        self.window.setWindowTitle(f"{t('app_title', self._lang)} v{__version__}")
         self.window.setMinimumSize(1000, 650)
         self.window.resize(1280, 800)
 
@@ -136,7 +122,68 @@ class ChaBiaoWindow:
         self._setup_ui(QtWidgets, QtCore, QtGui)
         self._setup_menu(QtWidgets, QtGui)
 
+    def _apply_theme(self) -> None:
+        qss = THEMES.get(self._theme, LIGHT_QSS)
+        self.app.setStyleSheet(qss)
+
+    def _retranslate(self) -> None:
+        lang = self._lang
+        self.window.setWindowTitle(f"{t('app_title', lang)} v{__version__}")
+        self.path_label.setText(t("no_file", lang))
+        self.filter_keyword.setPlaceholderText(t("filter_placeholder", lang))
+        self.filter_btn.setText(t("filter_btn", lang))
+        self.clear_btn.setText(t("clear_btn", lang))
+        self.spotlight_btn.setText(t("spotlight_btn", lang))
+        self.result_label.setText("")
+        self.window.statusBar().showMessage(t("status_ready", lang))
+
+        if not self.model.workbook:
+            self.info_label.setText("")
+        else:
+            info = self.model.workbook.info_dict()
+            filtered = t("filtered_suffix", lang) if self.model.is_filtered else ""
+            total = len(self.model.current_df) if self.model.current_df is not None else 0
+            self.row_count_label.setText(t("rows_info", lang, total=total, filtered=filtered))
+
+        self._update_page_info()
+        self._retranslate_menu()
+        self._retranslate_context_menu_actions()
+
+    def _retranslate_menu(self) -> None:
+        lang = self._lang
+        self._menu_file.setTitle(t("menu_file", lang))
+        self._menu_edit.setTitle(t("menu_edit", lang))
+        self._menu_view.setTitle(t("menu_view", lang))
+        self._action_open.setText(t("menu_open", lang))
+        self._action_export.setText(t("menu_export", lang))
+        self._action_quit.setText(t("menu_quit", lang))
+        self._action_copy.setText(t("menu_copy", lang))
+        self._action_select_all.setText(t("menu_select_all", lang))
+        self._action_spotlight.setText(t("menu_spotlight", lang))
+
+        self._menu_language.setTitle(t("menu_language", lang))
+        self._menu_theme.setTitle(t("menu_theme", lang))
+        self._action_theme_light.setText(t("menu_theme_light", lang))
+        self._action_theme_dark.setText(t("menu_theme_dark", lang))
+
+        self._update_theme_checkmarks()
+        self._update_lang_checkmarks()
+
+    def _retranslate_context_menu_actions(self) -> None:
+        lang = self._lang
+        self._ctx_copy_action.setText(t("ctx_copy", lang))
+        self._ctx_spotlight_action.setText(t("ctx_spotlight", lang))
+
+    def _update_theme_checkmarks(self) -> None:
+        self._action_theme_light.setChecked(self._theme == "light")
+        self._action_theme_dark.setChecked(self._theme == "dark")
+
+    def _update_lang_checkmarks(self) -> None:
+        for code, action in self._lang_actions.items():
+            action.setChecked(code == self._lang)
+
     def _setup_ui(self, QtWidgets, QtCore, QtGui) -> None:
+        lang = self._lang
         central = QtWidgets.QWidget()
         self.window.setCentralWidget(central)
         main_layout = QtWidgets.QVBoxLayout(central)
@@ -146,14 +193,14 @@ class ChaBiaoWindow:
         # --- Compact header: file info ---
         header = QtWidgets.QHBoxLayout()
         header.setSpacing(6)
-        self.path_label = QtWidgets.QLabel("📂 No file loaded — Press Ctrl+O to open")
+        self.path_label = QtWidgets.QLabel(t("no_file", lang))
         self.path_label.setStyleSheet("font-size: 13px; padding: 2px;")
         header.addWidget(self.path_label)
         self.info_label = QtWidgets.QLabel("")
         self.info_label.setStyleSheet("font-size: 12px; color: #888;")
         header.addWidget(self.info_label)
         header.addStretch()
-        self.spotlight_btn = QtWidgets.QPushButton("🔆 Spotlight")
+        self.spotlight_btn = QtWidgets.QPushButton(t("spotlight_btn", lang))
         self.spotlight_btn.setCheckable(True)
         self.spotlight_btn.setObjectName("pageBtn")
         self.spotlight_btn.setFixedWidth(100)
@@ -173,24 +220,24 @@ class ChaBiaoWindow:
         self.filter_column.setPlaceholderText("Column")
         filter_bar.addWidget(self.filter_column)
         self.filter_keyword = QtWidgets.QLineEdit()
-        self.filter_keyword.setPlaceholderText("Filter keyword / 筛选关键词...")
+        self.filter_keyword.setPlaceholderText(t("filter_placeholder", lang))
         self.filter_keyword.returnPressed.connect(self._do_filter)
         filter_bar.addWidget(self.filter_keyword, stretch=1)
         self.filter_mode = QtWidgets.QComboBox()
         self.filter_mode.addItems(["contains", "equals", "regex", "search"])
         self.filter_mode.setFixedWidth(100)
         filter_bar.addWidget(self.filter_mode)
-        filter_btn = QtWidgets.QPushButton("筛选 Filter")
-        filter_btn.clicked.connect(self._do_filter)
-        filter_btn.setFixedWidth(80)
-        filter_bar.addWidget(filter_btn)
-        clear_btn = QtWidgets.QPushButton("清除 Clear")
-        clear_btn.setObjectName("clearBtn")
-        clear_btn.clicked.connect(self._clear_filter)
-        clear_btn.setFixedWidth(80)
-        filter_bar.addWidget(clear_btn)
+        self.filter_btn = QtWidgets.QPushButton(t("filter_btn", lang))
+        self.filter_btn.clicked.connect(self._do_filter)
+        self.filter_btn.setFixedWidth(80)
+        filter_bar.addWidget(self.filter_btn)
+        self.clear_btn = QtWidgets.QPushButton(t("clear_btn", lang))
+        self.clear_btn.setObjectName("clearBtn")
+        self.clear_btn.clicked.connect(self._clear_filter)
+        self.clear_btn.setFixedWidth(80)
+        filter_bar.addWidget(self.clear_btn)
         self.result_label = QtWidgets.QLabel("")
-        self.result_label.setStyleSheet("color: #1976D2; font-weight: bold; font-size: 12px;")
+        self.result_label.setStyleSheet("font-size: 12px; font-weight: bold;")
         self.result_label.setFixedWidth(100)
         filter_bar.addWidget(self.result_label)
         main_layout.addLayout(filter_bar)
@@ -235,48 +282,103 @@ class ChaBiaoWindow:
         page_bar.addWidget(self.btn_last)
         page_bar.addStretch()
         self.row_count_label = QtWidgets.QLabel("")
-        self.row_count_label.setStyleSheet("font-size: 12px; color: #888;")
+        self.row_count_label.setStyleSheet("font-size: 12px;")
         page_bar.addWidget(self.row_count_label)
         main_layout.addLayout(page_bar)
 
-        self.window.statusBar().showMessage("就绪 Ready — Ctrl+O 打开文件 Open file")
+        self.window.statusBar().showMessage(t("status_ready", lang))
 
     def _setup_menu(self, QtWidgets, QtGui) -> None:
+        lang = self._lang
         menubar = self.window.menuBar()
 
-        file_menu = menubar.addMenu("&File")
-        open_action = QtGui.QAction("&Open…", self.window)
-        open_action.setShortcut("Ctrl+O")
-        open_action.triggered.connect(self._open_file)
-        file_menu.addAction(open_action)
+        # File menu
+        self._menu_file = menubar.addMenu(t("menu_file", lang))
+        self._action_open = QtGui.QAction(t("menu_open", lang), self.window)
+        self._action_open.setShortcut("Ctrl+O")
+        self._action_open.triggered.connect(self._open_file)
+        self._menu_file.addAction(self._action_open)
 
-        export_action = QtGui.QAction("&Export…", self.window)
-        export_action.setShortcut("Ctrl+E")
-        export_action.triggered.connect(self._export_file)
-        file_menu.addAction(export_action)
+        self._action_export = QtGui.QAction(t("menu_export", lang), self.window)
+        self._action_export.setShortcut("Ctrl+E")
+        self._action_export.triggered.connect(self._export_file)
+        self._menu_file.addAction(self._action_export)
 
-        file_menu.addSeparator()
-        quit_action = QtGui.QAction("&Quit", self.window)
-        quit_action.setShortcut("Ctrl+Q")
-        quit_action.triggered.connect(self.window.close)
-        file_menu.addAction(quit_action)
+        self._menu_file.addSeparator()
+        self._action_quit = QtGui.QAction(t("menu_quit", lang), self.window)
+        self._action_quit.setShortcut("Ctrl+Q")
+        self._action_quit.triggered.connect(self.window.close)
+        self._menu_file.addAction(self._action_quit)
 
-        edit_menu = menubar.addMenu("&Edit")
-        copy_action = QtGui.QAction("&Copy", self.window)
-        copy_action.setShortcut("Ctrl+C")
-        copy_action.triggered.connect(self._copy_selection)
-        edit_menu.addAction(copy_action)
+        # Edit menu
+        self._menu_edit = menubar.addMenu(t("menu_edit", lang))
+        self._action_copy = QtGui.QAction(t("menu_copy", lang), self.window)
+        self._action_copy.setShortcut("Ctrl+C")
+        self._action_copy.triggered.connect(self._copy_selection)
+        self._menu_edit.addAction(self._action_copy)
 
-        select_all_action = QtGui.QAction("Select &All", self.window)
-        select_all_action.setShortcut("Ctrl+A")
-        select_all_action.triggered.connect(self.table.selectAll)
-        edit_menu.addAction(select_all_action)
+        self._action_select_all = QtGui.QAction(t("menu_select_all", lang), self.window)
+        self._action_select_all.setShortcut("Ctrl+A")
+        self._action_select_all.triggered.connect(self.table.selectAll)
+        self._menu_edit.addAction(self._action_select_all)
 
-        view_menu = menubar.addMenu("&View")
-        spotlight_action = QtGui.QAction("&Spotlight 聚光灯", self.window)
-        spotlight_action.setShortcut("F6")
-        spotlight_action.triggered.connect(self._toggle_spotlight)
-        view_menu.addAction(spotlight_action)
+        # View menu
+        self._menu_view = menubar.addMenu(t("menu_view", lang))
+        self._action_spotlight = QtGui.QAction(t("menu_spotlight", lang), self.window)
+        self._action_spotlight.setShortcut("F6")
+        self._action_spotlight.triggered.connect(self._toggle_spotlight)
+        self._menu_view.addAction(self._action_spotlight)
+
+        self._menu_view.addSeparator()
+
+        # Language submenu
+        self._menu_language = self._menu_view.addMenu(t("menu_language", lang))
+        self._lang_actions: dict[str, QtGui.QAction] = {}
+        lang_group = QtGui.QActionGroup(self.window)
+        for code, name in SUPPORTED_LANGS.items():
+            action = lang_group.addAction(f"{name} ({code})")
+            action.setCheckable(True)
+            action.setChecked(code == self._lang)
+            action.triggered.connect(lambda checked, c=code: self._switch_language(c))
+            self._menu_language.addAction(action)
+            self._lang_actions[code] = action
+
+        # Theme submenu
+        self._menu_theme = self._menu_view.addMenu(t("menu_theme", lang))
+        theme_group = QtGui.QActionGroup(self.window)
+        self._action_theme_light = theme_group.addAction(t("menu_theme_light", lang))
+        self._action_theme_light.setCheckable(True)
+        self._action_theme_light.setChecked(self._theme == "light")
+        self._action_theme_light.triggered.connect(lambda: self._switch_theme("light"))
+        self._menu_theme.addAction(self._action_theme_light)
+
+        self._action_theme_dark = theme_group.addAction(t("menu_theme_dark", lang))
+        self._action_theme_dark.setCheckable(True)
+        self._action_theme_dark.setChecked(self._theme == "dark")
+        self._action_theme_dark.triggered.connect(lambda: self._switch_theme("dark"))
+        self._menu_theme.addAction(self._action_theme_dark)
+
+        # Context menu actions (created once, retranslated on language switch)
+        self._ctx_copy_action = QtGui.QAction(t("ctx_copy", lang), self.window)
+        self._ctx_copy_action.triggered.connect(self._copy_selection)
+        self._ctx_spotlight_action = QtGui.QAction(t("ctx_spotlight", lang), self.window)
+        self._ctx_spotlight_action.triggered.connect(self._toggle_spotlight)
+
+    def _switch_language(self, code: str) -> None:
+        self._lang = code
+        self._save_settings()
+        self._retranslate()
+
+    def _switch_theme(self, theme: str) -> None:
+        self._theme = theme
+        self._apply_theme()
+        self._save_settings()
+        self._retranslate()
+        if self._spotlight_active:
+            self._remove_spotlight()
+
+    def _save_settings(self) -> None:
+        _save_config({"lang": self._lang, "theme": self._theme})
 
     def _get_page_df(self) -> pd.DataFrame | None:
         df = self.model.current_df
@@ -288,6 +390,7 @@ class ChaBiaoWindow:
 
     def _update_page_info(self) -> None:
         df = self.model.current_df
+        lang = self._lang
         if df is None:
             self.page_info.setText("")
             self.row_count_label.setText("")
@@ -295,9 +398,9 @@ class ChaBiaoWindow:
         total = len(df)
         total_pages = max(1, (total + self._page_size - 1) // self._page_size)
         current = self._current_page + 1
-        filtered = " (filtered)" if self.model.is_filtered else ""
+        filtered = t("filtered_suffix", lang) if self.model.is_filtered else ""
         self.page_info.setText(f"{current}/{total_pages}")
-        self.row_count_label.setText(f"{total} rows{filtered}")
+        self.row_count_label.setText(t("rows_info", lang, total=total, filtered=filtered))
 
     def _page_first(self) -> None:
         self._current_page = 0
@@ -358,12 +461,12 @@ class ChaBiaoWindow:
 
     def _open_file(self) -> None:
         QtWidgets = self._QtWidgets
+        lang = self._lang
         path, _ = QtWidgets.QFileDialog.getOpenFileName(
             self.window,
-            "Open Spreadsheet / 打开表格",
+            t("open_dialog_title", lang),
             "",
-            "Spreadsheets (*.xlsx *.xls *.csv *.tsv *.xlsm);;"
-            "All Files (*)",
+            t("open_dialog_filter", lang),
         )
         if path:
             try:
@@ -373,19 +476,20 @@ class ChaBiaoWindow:
                     f"{info['rows']} rows × {info['columns']} cols"
                 )
                 self._load_data_to_table(self.model.current_df)
-                self.window.statusBar().showMessage(f"Loaded: {path}")
+                self.window.statusBar().showMessage(t("loaded", lang, path=path))
             except Exception as e:
-                QtWidgets.QMessageBox.critical(self.window, "Error", str(e))
+                QtWidgets.QMessageBox.critical(self.window, t("error", lang), str(e))
 
     def _export_file(self) -> None:
         QtWidgets = self._QtWidgets
+        lang = self._lang
         if self.model.current_df is None:
-            QtWidgets.QMessageBox.warning(self.window, "Warning", "No data to export")
+            QtWidgets.QMessageBox.warning(self.window, t("warning", lang), t("no_data_export", lang))
             return
 
         path, _ = QtWidgets.QFileDialog.getSaveFileName(
-            self.window, "Export / 导出", "",
-            "Excel (*.xlsx);;CSV (*.csv);;JSON (*.json)",
+            self.window, t("export_dialog_title", lang), "",
+            t("export_dialog_filter", lang),
         )
         if path:
             try:
@@ -398,44 +502,47 @@ class ChaBiaoWindow:
                     )
                 else:
                     df.to_excel(path, index=False)
-                self.window.statusBar().showMessage(f"Exported: {path}")
+                self.window.statusBar().showMessage(t("exported", lang, path=path))
             except Exception as e:
-                QtWidgets.QMessageBox.critical(self.window, "Error", str(e))
+                QtWidgets.QMessageBox.critical(self.window, t("error", lang), str(e))
 
     def _do_filter(self) -> None:
         col = self.filter_column.currentText()
         keyword = self.filter_keyword.text()
         mode = self.filter_mode.currentText()
+        lang = self._lang
         if not col or not keyword:
             return
         try:
             count = self.model.set_filter(col, keyword, mode)
-            self.result_label.setText(f"{count} hits")
+            self.result_label.setText(t("hits", lang, count=count))
             self._current_page = 0
             self._load_data_to_table(self.model.current_df)
             self.window.statusBar().showMessage(
-                f"Filtered: {count} rows matching '{keyword}' in '{col}'"
+                t("filtered", lang, count=count, keyword=keyword, col=col)
             )
-        except Exception as e:
-            self.result_label.setText(f"Error")
+        except Exception:
+            self.result_label.setText(t("filter_error", lang))
 
     def _clear_filter(self) -> None:
+        lang = self._lang
         self.model.clear_filter()
         self.filter_keyword.clear()
         self.result_label.setText("")
         if self.model.workbook:
             self._current_page = 0
             self._load_data_to_table(self.model.current_df)
-            self.window.statusBar().showMessage("Filter cleared")
+            self.window.statusBar().showMessage(t("filter_cleared", lang))
 
     def _toggle_spotlight(self) -> None:
+        lang = self._lang
         self._spotlight_active = not self._spotlight_active
         self.spotlight_btn.setChecked(self._spotlight_active)
         if self._spotlight_active:
-            self.window.statusBar().showMessage("Spotlight ON — click a cell to highlight row/col")
+            self.window.statusBar().showMessage(t("spotlight_on", lang))
             self.table.currentCellChanged.connect(self._apply_spotlight)
         else:
-            self.window.statusBar().showMessage("Spotlight OFF")
+            self.window.statusBar().showMessage(t("spotlight_off", lang))
             try:
                 self.table.currentCellChanged.disconnect(self._apply_spotlight)
             except Exception:
@@ -445,8 +552,9 @@ class ChaBiaoWindow:
     def _apply_spotlight(self, row: int, col: int) -> None:
         QtGui = self._QtGui
         self._remove_spotlight()
-        light_bg = QtGui.QBrush(QtGui.QColor(255, 255, 224))
-        focus_bg = QtGui.QBrush(QtGui.QColor(255, 235, 59))
+        colors = SPOTLIGHT_COLORS.get(self._theme, SPOTLIGHT_COLORS["light"])
+        light_bg = QtGui.QBrush(QtGui.QColor(*colors["row_col"]))
+        focus_bg = QtGui.QBrush(QtGui.QColor(*colors["focus"]))
         for c in range(self.table.columnCount()):
             item = self.table.item(row, c)
             if item:
@@ -470,6 +578,7 @@ class ChaBiaoWindow:
 
     def _copy_selection(self) -> None:
         QtWidgets = self._QtWidgets
+        lang = self._lang
         selection = self.table.selectedRanges()
         if not selection:
             return
@@ -482,15 +591,13 @@ class ChaBiaoWindow:
                     row_data.append(item.text() if item else "")
                 rows.append("\t".join(row_data))
         QtWidgets.QApplication.clipboard().setText("\n".join(rows))
-        self.window.statusBar().showMessage("Copied to clipboard")
+        self.window.statusBar().showMessage(t("copied", lang))
 
     def _context_menu(self, pos) -> None:
         QtWidgets = self._QtWidgets
         menu = QtWidgets.QMenu()
-        copy_action = menu.addAction("Copy / 复制")
-        copy_action.triggered.connect(self._copy_selection)
-        spotlight_action = menu.addAction("Toggle Spotlight / 聚光灯")
-        spotlight_action.triggered.connect(self._toggle_spotlight)
+        menu.addAction(self._ctx_copy_action)
+        menu.addAction(self._ctx_spotlight_action)
         menu.exec(self.table.viewport().mapToGlobal(pos))
 
     def run(self) -> None:

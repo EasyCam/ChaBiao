@@ -649,7 +649,7 @@ class TestPackageExports:
     def test_version(self):
         from chabiao import __version__
 
-        assert __version__.startswith("0.1")
+        assert __version__.startswith("0.2")
 
     def test_tool_result_import(self):
         from chabiao import ToolResult
@@ -681,6 +681,76 @@ class TestPackageExports:
 
         assert isinstance(TOOLS, list)
         assert callable(dispatch)
+
+
+class TestI18n:
+    def test_supported_langs(self):
+        from chabiao.i18n import SUPPORTED_LANGS
+        expected = ["en", "zh", "ja", "fr", "ru", "de", "es", "pt", "it", "ko"]
+        for code in expected:
+            assert code in SUPPORTED_LANGS, f"Missing language: {code}"
+
+    def test_t_english(self):
+        from chabiao.i18n import t
+        assert "Filter" in t("filter_btn", "en")
+        assert "Spotlight" in t("spotlight_btn", "en")
+
+    def test_t_chinese(self):
+        from chabiao.i18n import t
+        assert "筛选" in t("filter_btn", "zh")
+        assert "聚光灯" in t("spotlight_btn", "zh")
+
+    def test_t_japanese(self):
+        from chabiao.i18n import t
+        assert "フィルター" in t("filter_btn", "ja")
+
+    def test_t_format_kwargs(self):
+        from chabiao.i18n import t
+        result = t("hits", "en", count=42)
+        assert "42" in result
+
+    def test_t_fallback_to_en(self):
+        from chabiao.i18n import t
+        result = t("filter_btn", "xx_unknown")
+        assert "Filter" in result
+
+    def test_all_langs_have_all_keys(self):
+        from chabiao.i18n import SUPPORTED_LANGS, _STRINGS, _DEFAULT
+        en_keys = set(_STRINGS[_DEFAULT].keys())
+        for code in SUPPORTED_LANGS:
+            lang_keys = set(_STRINGS.get(code, {}).keys())
+            missing = en_keys - lang_keys
+            assert not missing, f"Language {code} missing keys: {missing}"
+
+
+class TestTheme:
+    def test_themes_exist(self):
+        from chabiao.theme import THEMES
+        assert "light" in THEMES
+        assert "dark" in THEMES
+
+    def test_light_qss_not_empty(self):
+        from chabiao.theme import LIGHT_QSS
+        assert len(LIGHT_QSS) > 100
+
+    def test_dark_qss_not_empty(self):
+        from chabiao.theme import DARK_QSS
+        assert len(DARK_QSS) > 100
+
+    def test_spotlight_colors(self):
+        from chabiao.theme import SPOTLIGHT_COLORS
+        assert "light" in SPOTLIGHT_COLORS
+        assert "dark" in SPOTLIGHT_COLORS
+        assert "row_col" in SPOTLIGHT_COLORS["light"]
+        assert "focus" in SPOTLIGHT_COLORS["light"]
+
+    def test_spotlight_colors_are_tuples(self):
+        from chabiao.theme import SPOTLIGHT_COLORS
+        for theme_name, colors in SPOTLIGHT_COLORS.items():
+            assert isinstance(colors["row_col"], tuple)
+            assert isinstance(colors["focus"], tuple)
+            assert len(colors["row_col"]) == 3
+            assert len(colors["focus"]) == 3
 
 
 class TestMergeConcat:
