@@ -1,8 +1,14 @@
-"""Core data engine for ChaBiao - fast spreadsheet loading and manipulation."""
+"""Core data engine for ChaBiao - fast spreadsheet loading and manipulation.
+
+Uses multi-threading and optimized pandas settings for fast loading
+of large spreadsheet files (15MB+, 20K+ rows).
+"""
 
 from __future__ import annotations
 
 import logging
+import os
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Any, Sequence
 
@@ -22,6 +28,19 @@ FORMAT_READERS: dict[str, dict[str, Any]] = {
     ".ods": {"engine": "odf"},
 }
 
+_MAX_WORKERS = min(os.cpu_count() or 4, 8)
+
+
+def _optimize_pandas() -> None:
+    """Apply performance-optimized pandas settings."""
+    try:
+        pd.options.mode.dtype_backend = "pyarrow"
+    except (pd.errors.OptionError, AttributeError):
+        pass
+
+
+_optimize_pandas()
+
 
 def detect_format(path: Path) -> str:
     suffix = path.suffix.lower()
@@ -31,8 +50,17 @@ def detect_format(path: Path) -> str:
     return suffix
 
 
+def _load_sheet(xls: pd.ExcelFile, sname: str) -> tuple[str, pd.DataFrame]:
+    """Load a single sheet - used for parallel loading."""
+    df = pd.read_excel(xls, sheet_name=sname)
+    return sname, df
+
+
 class SheetWorkbook:
-    """Represents a loaded workbook with one or more sheets."""
+    """Represents a loaded workbook with one or more sheets.
+
+    Multi-sheet workbooks load sheets in parallel using ThreadPoolExecutor.
+    """
 
     def __init__(self, path: str | Path, sheet_name: str | int | None = None):
         self.path = Path(path)
@@ -55,16 +83,29 @@ class SheetWorkbook:
         else:
             xls = pd.ExcelFile(self.path, **kwargs)
             self._sheet_names = list(xls.sheet_names)
+
             if sheet_name is not None:
                 if isinstance(sheet_name, int):
                     sheet_name = self._sheet_names[sheet_name]
                 df = pd.read_excel(xls, sheet_name=sheet_name)
                 self._sheets[sheet_name] = df
                 self._active_sheet = sheet_name
-            else:
-                for sname in self._sheet_names:
-                    self._sheets[sname] = pd.read_excel(xls, sheet_name=sname)
+            elif len(self._sheet_names) > 1:
+                # Load all sheets in parallel
+                with ThreadPoolExecutor(max_workers=_MAX_WORKERS) as pool:
+                    futures = {
+                        pool.submit(_load_sheet, xls, sname): sname
+                        for sname in self._sheet_names
+                    }
+                    for future in as_completed(futures):
+                        sname, df = future.result()
+                        self._sheets[sname] = df
                 self._active_sheet = self._sheet_names[0]
+            else:
+                sname = self._sheet_names[0]
+                self._sheets[sname] = pd.read_excel(xls, sheet_name=sname)
+                self._active_sheet = sname
+
             xls.close()
 
     @property
@@ -289,17 +330,24 @@ def quick_view(path: str | Path, n: int = 10, sheet: str | int | None = None) ->
     }
 
 
+def _load_file(p: str | Path) -> pd.DataFrame:
+    """Load a single file - used for parallel merge/concat."""
+    wb = load_workbook(p)
+    return wb.active_df
+
+
 def merge_files(
     paths: Sequence[str | Path],
     on: str | list[str] | None = None,
     how: str = "inner",
     sort: bool = False,
 ) -> pd.DataFrame:
-    """Merge multiple spreadsheet files by key columns."""
-    dfs: list[pd.DataFrame] = []
-    for p in paths:
-        wb = load_workbook(p)
-        dfs.append(wb.active_df)
+    """Merge multiple spreadsheet files by key columns.
+
+    Loads files in parallel using ThreadPoolExecutor.
+    """
+    with ThreadPoolExecutor(max_workers=min(len(paths), _MAX_WORKERS)) as pool:
+        dfs = list(pool.map(_load_file, paths))
 
     result = dfs[0]
     for df in dfs[1:]:
@@ -314,6 +362,10 @@ def concat_files(
     paths: Sequence[str | Path],
     ignore_index: bool = True,
 ) -> pd.DataFrame:
-    """Concatenate multiple spreadsheet files vertically."""
-    dfs = [load_workbook(p).active_df for p in paths]
+    """Concatenate multiple spreadsheet files vertically.
+
+    Loads files in parallel using ThreadPoolExecutor.
+    """
+    with ThreadPoolExecutor(max_workers=min(len(paths), _MAX_WORKERS)) as pool:
+        dfs = list(pool.map(_load_file, paths))
     return pd.concat(dfs, ignore_index=ignore_index)

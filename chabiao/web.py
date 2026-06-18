@@ -4,11 +4,15 @@ from __future__ import annotations
 
 import io
 import json
+import os
 import tempfile
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 from .__version__ import __version__
 from .core import SheetWorkbook, load_workbook
+
+_MAX_WORKERS = min(os.cpu_count() or 4, 8)
 
 
 def create_app():
@@ -164,12 +168,17 @@ def create_app():
             raise HTTPException(status_code=404, detail="File not found")
         columns = wb.columns(sheet)
         dtypes = wb.dtypes_info(sheet)
-        unique_counts = {}
-        for col in columns:
+
+        def _count_unique(col: str) -> tuple[str, int]:
             try:
-                unique_counts[col] = len(wb.unique_values(col, sheet=sheet))
+                return col, len(wb.unique_values(col, sheet=sheet))
             except Exception:
-                unique_counts[col] = -1
+                return col, -1
+
+        with ThreadPoolExecutor(max_workers=min(len(columns), _MAX_WORKERS)) as pool:
+            results = list(pool.map(_count_unique, columns))
+        unique_counts = dict(results)
+
         return JSONResponse(
             {
                 "columns": columns,

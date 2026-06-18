@@ -1,13 +1,21 @@
-"""Advanced filtering engine for ChaBiao - fast column filtering and search."""
+"""Advanced filtering engine for ChaBiao - fast column filtering and search.
+
+Uses vectorized pandas operations for maximum speed on large datasets
+and ThreadPoolExecutor for parallel multi-column search.
+"""
 
 from __future__ import annotations
 
+import os
 import re
+from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
 import pandas as pd
 
 from .core import SheetWorkbook
+
+_MAX_WORKERS = min(os.cpu_count() or 4, 8)
 
 
 def filter_column(
@@ -149,20 +157,38 @@ def search_keyword(
     regex_mode: bool = False,
     sheet: str | int | None = None,
 ) -> pd.DataFrame:
-    """Search for a keyword across specified columns (or all columns)."""
+    """Search for a keyword across specified columns (or all columns).
+
+    Uses ThreadPoolExecutor for parallel multi-column search on large datasets.
+    """
     df = wb.get_sheet(sheet)
     cols = columns or list(df.columns)
-    mask = pd.Series([False] * len(df), index=df.index)
-
     flags = 0 if case_sensitive else re.IGNORECASE
-    for col in cols:
-        if col not in df.columns:
-            continue
-        if regex_mode:
-            mask |= df[col].astype(str).str.contains(keyword, na=False, regex=True, flags=flags)
-        else:
+
+    if len(cols) > 4 and len(df) > 5000:
+        # Parallel search for large datasets with many columns
+        def _search_col(col: str) -> pd.Series:
+            if regex_mode:
+                return df[col].astype(str).str.contains(keyword, na=False, regex=True, flags=flags)
             pattern = re.escape(keyword)
-            mask |= df[col].astype(str).str.contains(pattern, na=False, regex=True, flags=flags)
+            return df[col].astype(str).str.contains(pattern, na=False, regex=True, flags=flags)
+
+        with ThreadPoolExecutor(max_workers=min(len(cols), _MAX_WORKERS)) as pool:
+            col_masks = list(pool.map(_search_col, cols))
+
+        mask = col_masks[0]
+        for m in col_masks[1:]:
+            mask |= m
+    else:
+        mask = pd.Series([False] * len(df), index=df.index)
+        for col in cols:
+            if col not in df.columns:
+                continue
+            if regex_mode:
+                mask |= df[col].astype(str).str.contains(keyword, na=False, regex=True, flags=flags)
+            else:
+                pattern = re.escape(keyword)
+                mask |= df[col].astype(str).str.contains(pattern, na=False, regex=True, flags=flags)
 
     return df[mask]
 

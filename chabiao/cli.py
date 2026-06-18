@@ -29,15 +29,21 @@ def _print_result(result: ToolResult, json_output: bool = False, quiet: bool = F
             if isinstance(data, dict):
                 for key, value in data.items():
                     if key == "rows":
-                        import pandas as pd
-                        from tabulate import tabulate
-
                         if value:
-                            df = pd.DataFrame(value)
+                            max_rows = 50
+                            truncated = value[:max_rows] if len(value) > max_rows else value
+                            import pandas as pd
+                            from tabulate import tabulate
+
+                            df = pd.DataFrame(truncated)
                             print(tabulate(df, headers="keys", tablefmt="grid", showindex=False))
-                            print(f"\nTotal: {len(value)} rows")
+                            if len(value) > max_rows:
+                                print(f"\nShowing {max_rows} of {len(value)} rows")
+                            else:
+                                print(f"\nTotal: {len(value)} rows")
                     elif isinstance(value, (list, dict)):
-                        print(f"{key}: {json.dumps(value, ensure_ascii=False, default=str)[:200]}")
+                        text = json.dumps(value, ensure_ascii=False, default=str)
+                        print(f"{key}: {text[:500]}")
                     else:
                         print(f"{key}: {value}")
             else:
