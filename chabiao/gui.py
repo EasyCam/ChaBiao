@@ -15,7 +15,6 @@ from .core import SheetWorkbook, load_workbook
 def _import_pyside6():
     try:
         from PySide6 import QtCore, QtGui, QtWidgets
-
         return QtWidgets, QtCore, QtGui
     except ImportError:
         print("PySide6 is required for GUI mode. Install with: pip install chabiao[gui]")
@@ -23,6 +22,47 @@ def _import_pyside6():
 
 
 PAGE_SIZE = 500
+
+_STYLESHEET = """
+QMainWindow { background: #f8f9fa; }
+QLabel { color: #333; }
+QPushButton {
+    background: #1976D2; color: white; border: none;
+    padding: 5px 14px; border-radius: 4px; font-size: 13px;
+}
+QPushButton:hover { background: #1565C0; }
+QPushButton:pressed { background: #0D47A1; }
+QPushButton#clearBtn {
+    background: #78909C; color: white;
+}
+QPushButton#clearBtn:hover { background: #607D8B; }
+QPushButton#pageBtn {
+    background: #e0e0e0; color: #333; padding: 3px 10px;
+}
+QPushButton#pageBtn:hover { background: #bdbdbd; }
+QComboBox {
+    padding: 4px 8px; border: 1px solid #ccc; border-radius: 4px;
+    background: white; min-width: 100px;
+}
+QLineEdit {
+    padding: 4px 8px; border: 1px solid #ccc; border-radius: 4px;
+    background: white;
+}
+QTableWidget {
+    gridline-color: #e0e0e0; border: 1px solid #ddd;
+    selection-background-color: #BBDEFB;
+}
+QHeaderView::section {
+    background: #1976D2; color: white; padding: 6px 10px;
+    border: none; font-weight: 500;
+}
+QStatusBar { background: #f5f5f5; color: #666; }
+QTabBar::tab {
+    background: #e0e0e0; padding: 6px 16px; border-top-left-radius: 4px;
+    border-top-right-radius: 4px; margin-right: 2px;
+}
+QTabBar::tab:selected { background: white; font-weight: bold; }
+"""
 
 
 class SpreadsheetModel:
@@ -47,10 +87,8 @@ class SpreadsheetModel:
 
     def set_filter(self, column: str, keyword: str, mode: str = "contains") -> int:
         from .filters import filter_column, search_keyword
-
         if not self.workbook:
             return 0
-        base_df = self._full_df
         wb = self.workbook
         if mode == "contains":
             self._filtered_df = filter_column(wb, column, contains=keyword)
@@ -81,9 +119,11 @@ class ChaBiaoWindow:
         QtWidgets, QtCore, QtGui = _import_pyside6()
 
         self.app = QtWidgets.QApplication(sys.argv)
+        self.app.setStyleSheet(_STYLESHEET)
         self.window = QtWidgets.QMainWindow()
         self.window.setWindowTitle(f"ChaBiao 查表 v{__version__}")
-        self.window.setMinimumSize(1200, 800)
+        self.window.setMinimumSize(1000, 650)
+        self.window.resize(1280, 800)
 
         self.model = SpreadsheetModel()
         self._QtWidgets = QtWidgets
@@ -99,120 +139,140 @@ class ChaBiaoWindow:
     def _setup_ui(self, QtWidgets, QtCore, QtGui) -> None:
         central = QtWidgets.QWidget()
         self.window.setCentralWidget(central)
-        layout = QtWidgets.QVBoxLayout(central)
+        main_layout = QtWidgets.QVBoxLayout(central)
+        main_layout.setContentsMargins(8, 4, 8, 4)
+        main_layout.setSpacing(4)
 
-        toolbar = QtWidgets.QHBoxLayout()
-        self.path_label = QtWidgets.QLabel("No file loaded")
-        self.path_label.setStyleSheet(
-            "font-weight: bold; font-size: 14px; padding: 5px;"
-        )
-        toolbar.addWidget(self.path_label)
+        # --- Compact header: file info ---
+        header = QtWidgets.QHBoxLayout()
+        header.setSpacing(6)
+        self.path_label = QtWidgets.QLabel("📂 No file loaded — Press Ctrl+O to open")
+        self.path_label.setStyleSheet("font-size: 13px; padding: 2px;")
+        header.addWidget(self.path_label)
         self.info_label = QtWidgets.QLabel("")
-        self.info_label.setStyleSheet("color: gray; padding: 5px;")
-        toolbar.addWidget(self.info_label)
-        toolbar.addStretch()
-        layout.addLayout(toolbar)
+        self.info_label.setStyleSheet("font-size: 12px; color: #888;")
+        header.addWidget(self.info_label)
+        header.addStretch()
+        self.spotlight_btn = QtWidgets.QPushButton("🔆 Spotlight")
+        self.spotlight_btn.setCheckable(True)
+        self.spotlight_btn.setObjectName("pageBtn")
+        self.spotlight_btn.setFixedWidth(100)
+        self.spotlight_btn.clicked.connect(self._toggle_spotlight)
+        header.addWidget(self.spotlight_btn)
+        main_layout.addLayout(header)
 
-        self.sheet_tabs = QtWidgets.QTabWidget()
-        layout.addWidget(self.sheet_tabs)
-
+        # --- Filter bar ---
         filter_bar = QtWidgets.QHBoxLayout()
+        filter_bar.setSpacing(4)
+        filter_label = QtWidgets.QLabel("🔍")
+        filter_label.setFixedWidth(20)
+        filter_bar.addWidget(filter_label)
         self.filter_column = QtWidgets.QComboBox()
-        self.filter_column.setMinimumWidth(150)
+        self.filter_column.setMinimumWidth(120)
         self.filter_column.setEditable(True)
-        filter_bar.addWidget(QtWidgets.QLabel("Column:"))
+        self.filter_column.setPlaceholderText("Column")
         filter_bar.addWidget(self.filter_column)
-
         self.filter_keyword = QtWidgets.QLineEdit()
-        self.filter_keyword.setPlaceholderText(
-            "Type to filter / 输入筛选关键词..."
-        )
+        self.filter_keyword.setPlaceholderText("Filter keyword / 筛选关键词...")
         self.filter_keyword.returnPressed.connect(self._do_filter)
-        filter_bar.addWidget(self.filter_keyword, stretch=3)
-
+        filter_bar.addWidget(self.filter_keyword, stretch=1)
         self.filter_mode = QtWidgets.QComboBox()
         self.filter_mode.addItems(["contains", "equals", "regex", "search"])
+        self.filter_mode.setFixedWidth(100)
         filter_bar.addWidget(self.filter_mode)
-
-        filter_btn = QtWidgets.QPushButton("Filter 筛选")
+        filter_btn = QtWidgets.QPushButton("筛选 Filter")
         filter_btn.clicked.connect(self._do_filter)
+        filter_btn.setFixedWidth(80)
         filter_bar.addWidget(filter_btn)
-
-        clear_btn = QtWidgets.QPushButton("Clear 清除")
+        clear_btn = QtWidgets.QPushButton("清除 Clear")
+        clear_btn.setObjectName("clearBtn")
         clear_btn.clicked.connect(self._clear_filter)
+        clear_btn.setFixedWidth(80)
         filter_bar.addWidget(clear_btn)
-
         self.result_label = QtWidgets.QLabel("")
-        self.result_label.setStyleSheet(
-            "color: #2196F3; font-weight: bold;"
-        )
+        self.result_label.setStyleSheet("color: #1976D2; font-weight: bold; font-size: 12px;")
+        self.result_label.setFixedWidth(100)
         filter_bar.addWidget(self.result_label)
-        layout.addLayout(filter_bar)
+        main_layout.addLayout(filter_bar)
 
+        # --- Table (takes all remaining space) ---
         self.table = QtWidgets.QTableWidget()
         self.table.setAlternatingRowColors(True)
         self.table.setSortingEnabled(False)
-        self.table.setContextMenuPolicy(
-            QtCore.Qt.ContextMenuPolicy.CustomContextMenu
-        )
+        self.table.setContextMenuPolicy(QtCore.Qt.ContextMenuPolicy.CustomContextMenu)
         self.table.customContextMenuRequested.connect(self._context_menu)
-        layout.addWidget(self.table)
+        self.table.verticalHeader().setDefaultSectionSize(24)
+        self.table.verticalHeader().setVisible(False)
+        self.table.horizontalHeader().setStretchLastSection(True)
+        self.table.setSelectionBehavior(QtWidgets.QAbstractItemView.SelectionBehavior.SelectRows)
+        main_layout.addWidget(self.table, stretch=1)
 
+        # --- Pagination bar ---
         page_bar = QtWidgets.QHBoxLayout()
-        self.btn_first = QtWidgets.QPushButton("<< First")
+        page_bar.setSpacing(4)
+        self.btn_first = QtWidgets.QPushButton("<<")
+        self.btn_first.setObjectName("pageBtn")
+        self.btn_first.setFixedWidth(36)
         self.btn_first.clicked.connect(self._page_first)
-        self.btn_prev = QtWidgets.QPushButton("< Prev")
+        self.btn_prev = QtWidgets.QPushButton("<")
+        self.btn_prev.setObjectName("pageBtn")
+        self.btn_prev.setFixedWidth(36)
         self.btn_prev.clicked.connect(self._page_prev)
         self.page_info = QtWidgets.QLabel("")
-        self.page_info.setStyleSheet("padding: 0 10px; font-weight: bold;")
-        self.btn_next = QtWidgets.QPushButton("Next >")
+        self.page_info.setStyleSheet("font-size: 12px; padding: 0 6px;")
+        self.btn_next = QtWidgets.QPushButton(">")
+        self.btn_next.setObjectName("pageBtn")
+        self.btn_next.setFixedWidth(36)
         self.btn_next.clicked.connect(self._page_next)
-        self.btn_last = QtWidgets.QPushButton("Last >>")
+        self.btn_last = QtWidgets.QPushButton(">>")
+        self.btn_last.setObjectName("pageBtn")
+        self.btn_last.setFixedWidth(36)
         self.btn_last.clicked.connect(self._page_last)
         page_bar.addWidget(self.btn_first)
         page_bar.addWidget(self.btn_prev)
         page_bar.addWidget(self.page_info)
         page_bar.addWidget(self.btn_next)
         page_bar.addWidget(self.btn_last)
-        layout.addLayout(page_bar)
+        page_bar.addStretch()
+        self.row_count_label = QtWidgets.QLabel("")
+        self.row_count_label.setStyleSheet("font-size: 12px; color: #888;")
+        page_bar.addWidget(self.row_count_label)
+        main_layout.addLayout(page_bar)
 
-        self.window.statusBar().showMessage(
-            "Ready / 就绪 - Open a file to start / 打开文件开始使用"
-        )
+        self.window.statusBar().showMessage("就绪 Ready — Ctrl+O 打开文件 Open file")
 
     def _setup_menu(self, QtWidgets, QtGui) -> None:
         menubar = self.window.menuBar()
 
-        file_menu = menubar.addMenu("&File 文件")
-        open_action = QtGui.QAction("&Open 打开", self.window)
+        file_menu = menubar.addMenu("&File")
+        open_action = QtGui.QAction("&Open…", self.window)
         open_action.setShortcut("Ctrl+O")
         open_action.triggered.connect(self._open_file)
         file_menu.addAction(open_action)
 
-        export_action = QtGui.QAction("&Export 导出", self.window)
+        export_action = QtGui.QAction("&Export…", self.window)
         export_action.setShortcut("Ctrl+E")
         export_action.triggered.connect(self._export_file)
         file_menu.addAction(export_action)
 
         file_menu.addSeparator()
-        quit_action = QtGui.QAction("&Quit 退出", self.window)
+        quit_action = QtGui.QAction("&Quit", self.window)
         quit_action.setShortcut("Ctrl+Q")
         quit_action.triggered.connect(self.window.close)
         file_menu.addAction(quit_action)
 
-        edit_menu = menubar.addMenu("&Edit 编辑")
-        copy_action = QtGui.QAction("&Copy 复制", self.window)
+        edit_menu = menubar.addMenu("&Edit")
+        copy_action = QtGui.QAction("&Copy", self.window)
         copy_action.setShortcut("Ctrl+C")
         copy_action.triggered.connect(self._copy_selection)
         edit_menu.addAction(copy_action)
 
-        select_all_action = QtWidgets = self._QtWidgets
-        select_all_action = QtGui.QAction("Select &All 全选", self.window)
+        select_all_action = QtGui.QAction("Select &All", self.window)
         select_all_action.setShortcut("Ctrl+A")
         select_all_action.triggered.connect(self.table.selectAll)
         edit_menu.addAction(select_all_action)
 
-        view_menu = menubar.addMenu("&View 视图")
+        view_menu = menubar.addMenu("&View")
         spotlight_action = QtGui.QAction("&Spotlight 聚光灯", self.window)
         spotlight_action.setShortcut("F6")
         spotlight_action.triggered.connect(self._toggle_spotlight)
@@ -222,25 +282,22 @@ class ChaBiaoWindow:
         df = self.model.current_df
         if df is None:
             return None
-        total = len(df)
         start = self._current_page * self._page_size
-        end = min(start + self._page_size, total)
+        end = min(start + self._page_size, len(df))
         return df.iloc[start:end]
 
     def _update_page_info(self) -> None:
         df = self.model.current_df
         if df is None:
             self.page_info.setText("")
+            self.row_count_label.setText("")
             return
         total = len(df)
         total_pages = max(1, (total + self._page_size - 1) // self._page_size)
         current = self._current_page + 1
         filtered = " (filtered)" if self.model.is_filtered else ""
-        self.page_info.setText(
-            f"Page {current}/{total_pages} | "
-            f"{total} rows{filtered} | "
-            f"{self._page_size}/page"
-        )
+        self.page_info.setText(f"{current}/{total_pages}")
+        self.row_count_label.setText(f"{total} rows{filtered}")
 
     def _page_first(self) -> None:
         self._current_page = 0
@@ -292,11 +349,11 @@ class ChaBiaoWindow:
                 self.table.setItem(j, i, item)
 
         self.table.resizeColumnsToContents()
+        self.filter_column.clear()
+        self.filter_column.addItems(list(df.columns))
 
     def _load_data_to_table(self, df: pd.DataFrame) -> None:
         self._current_page = 0
-        self.filter_column.clear()
-        self.filter_column.addItems(list(df.columns))
         self._refresh_table()
 
     def _open_file(self) -> None:
@@ -311,11 +368,9 @@ class ChaBiaoWindow:
         if path:
             try:
                 info = self.model.load(path)
-                self.path_label.setText(Path(path).name)
-                cols_preview = ", ".join(info["column_names"][:5])
+                self.path_label.setText(f"📂 {Path(path).name}")
                 self.info_label.setText(
-                    f"{info['rows']} rows × {info['columns']} cols | "
-                    f"Sheets: {cols_preview}..."
+                    f"{info['rows']} rows × {info['columns']} cols"
                 )
                 self._load_data_to_table(self.model.current_df)
                 self.window.statusBar().showMessage(f"Loaded: {path}")
@@ -355,13 +410,14 @@ class ChaBiaoWindow:
             return
         try:
             count = self.model.set_filter(col, keyword, mode)
-            self.result_label.setText(f"{count} results")
+            self.result_label.setText(f"{count} hits")
             self._current_page = 0
             self._load_data_to_table(self.model.current_df)
-            msg = f"Filtered: {count} rows matching '{keyword}' in '{col}'"
-            self.window.statusBar().showMessage(msg)
+            self.window.statusBar().showMessage(
+                f"Filtered: {count} rows matching '{keyword}' in '{col}'"
+            )
         except Exception as e:
-            self.result_label.setText(f"Error: {e}")
+            self.result_label.setText(f"Error")
 
     def _clear_filter(self) -> None:
         self.model.clear_filter()
@@ -374,12 +430,12 @@ class ChaBiaoWindow:
 
     def _toggle_spotlight(self) -> None:
         self._spotlight_active = not self._spotlight_active
+        self.spotlight_btn.setChecked(self._spotlight_active)
         if self._spotlight_active:
-            msg = "Spotlight ON / 聚光灯已开启 - Click a cell to highlight row/col"
-            self.window.statusBar().showMessage(msg)
+            self.window.statusBar().showMessage("Spotlight ON — click a cell to highlight row/col")
             self.table.currentCellChanged.connect(self._apply_spotlight)
         else:
-            self.window.statusBar().showMessage("Spotlight OFF / 聚光灯已关闭")
+            self.window.statusBar().showMessage("Spotlight OFF")
             try:
                 self.table.currentCellChanged.disconnect(self._apply_spotlight)
             except Exception:
@@ -426,9 +482,7 @@ class ChaBiaoWindow:
                     row_data.append(item.text() if item else "")
                 rows.append("\t".join(row_data))
         QtWidgets.QApplication.clipboard().setText("\n".join(rows))
-        self.window.statusBar().showMessage(
-            "Copied to clipboard / 已复制到剪贴板"
-        )
+        self.window.statusBar().showMessage("Copied to clipboard")
 
     def _context_menu(self, pos) -> None:
         QtWidgets = self._QtWidgets

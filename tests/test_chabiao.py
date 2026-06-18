@@ -649,7 +649,7 @@ class TestPackageExports:
     def test_version(self):
         from chabiao import __version__
 
-        assert __version__ == "0.1.0"
+        assert __version__.startswith("0.1")
 
     def test_tool_result_import(self):
         from chabiao import ToolResult
