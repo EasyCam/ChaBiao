@@ -94,8 +94,7 @@ class SheetWorkbook:
                 # Load all sheets in parallel
                 with ThreadPoolExecutor(max_workers=_MAX_WORKERS) as pool:
                     futures = {
-                        pool.submit(_load_sheet, xls, sname): sname
-                        for sname in self._sheet_names
+                        pool.submit(_load_sheet, xls, sname): sname for sname in self._sheet_names
                     }
                     for future in as_completed(futures):
                         sname, df = future.result()

@@ -10,6 +10,8 @@
 - **Cross-Reference**: Search in one table, extract columns to another (查表整合)
 - **Multi-format**: Support .xlsx, .xls, .csv, .tsv, .xlsm, .ods
 - **Three Interfaces**: CLI, PySide6 GUI, and Web (FastAPI)
+- **10 Languages**: 🇨🇳 中文 · 🇺🇸 English · 🇯🇵 日本語 · 🇫🇷 Français · 🇷🇺 Русский · 🇩🇪 Deutsch · 🇪🇸 Español · 🇧🇷 Português · 🇮🇹 Italiano · 🇰🇷 한국어
+- **Dark Theme**: Catppuccin-inspired dark theme for GUI and Web
 - **Data Aggregation**: Pivot tables, group-by, subtotals
 - **File Comparison**: Merge and compare two spreadsheet files
 - **Export**: Convert between formats (xlsx, csv, json, tsv)
@@ -77,7 +79,7 @@ chabiao spotlight data.xlsx --row 100 --column Price
 ### Python API
 
 ```python
-from chabiao import open_file, filter_data, search_data, spotlight
+from chabiao import open_file, filter_data, search_data, spotlight_view
 
 # Open a spreadsheet
 result = open_file(input_path="data.xlsx")
@@ -93,7 +95,7 @@ result = search_data(input_path="data.xlsx", keyword="error", columns=["Message"
 print(result.data["total_matches"])
 
 # Spotlight on a row
-result = spotlight(input_path="data.xlsx", row=100, column="Price")
+result = spotlight_view(input_path="data.xlsx", row=100, column="Price")
 print(result.data["row_data"])       # Full row data
 print(result.data["column_stats"])   # Column statistics
 ```
@@ -107,10 +109,11 @@ python -m chabiao --gui
 ```
 
 Features:
-- Drag & drop file opening
+- Multi-language support (10 languages): View → Language
+- Light/Dark theme switching: View → Theme
 - Instant column filter dropdown (no lag!)
 - Spotlight mode (F6) to highlight rows and columns
-- Sheet tabs for multi-sheet workbooks
+- Pagination for large files (500 rows/page)
 - Copy selection to clipboard (Ctrl+C)
 - Export to CSV/JSON/Excel
 
@@ -122,7 +125,7 @@ chabiao-web
 python -m chabiao --web
 ```
 
-Open http://localhost:8900 in your browser.
+Open http://localhost:8900 in your browser. Supports language (`?lang=zh`) and theme (`?theme=dark`) URL parameters.
 
 ## Usage
 

@@ -128,7 +128,9 @@ _STRINGS: dict[str, dict[str, str]] = {
         "menu_theme_light": "ライト(&L)",
         "menu_theme_dark": "ダーク(&D)",
         "open_dialog_title": "スプレッドシートを開く",
-        "open_dialog_filter": "スプレッドシート (*.xlsx *.xls *.csv *.tsv *.xlsm);;すべてのファイル (*)",
+        "open_dialog_filter": (  # noqa: E501
+            "スプレッドシート (*.xlsx *.xls *.csv *.tsv *.xlsm);;すべてのファイル (*)"
+        ),
         "export_dialog_title": "エクスポート",
         "export_dialog_filter": "Excel (*.xlsx);;CSV (*.csv);;JSON (*.json)",
         "warning": "警告",
@@ -296,7 +298,9 @@ _STRINGS: dict[str, dict[str, str]] = {
         "menu_theme_light": "&Claro",
         "menu_theme_dark": "&Oscuro",
         "open_dialog_title": "Abrir hoja de cálculo",
-        "open_dialog_filter": "Hojas de cálculo (*.xlsx *.xls *.csv *.tsv *.xlsm);;Todos los archivos (*)",
+        "open_dialog_filter": (  # noqa: E501
+            "Hojas de cálculo (*.xlsx *.xls *.csv *.tsv *.xlsm);;Todos los archivos (*)"
+        ),
         "export_dialog_title": "Exportar",
         "export_dialog_filter": "Excel (*.xlsx);;CSV (*.csv);;JSON (*.json)",
         "warning": "Advertencia",
@@ -380,7 +384,9 @@ _STRINGS: dict[str, dict[str, str]] = {
         "menu_theme_light": "&Chiaro",
         "menu_theme_dark": "&Scuro",
         "open_dialog_title": "Apri foglio di calcolo",
-        "open_dialog_filter": "Fogli di calcolo (*.xlsx *.xls *.csv *.tsv *.xlsm);;Tutti i file (*)",
+        "open_dialog_filter": (  # noqa: E501
+            "Fogli di calcolo (*.xlsx *.xls *.csv *.tsv *.xlsm);;Tutti i file (*)"
+        ),
         "export_dialog_title": "Esporta",
         "export_dialog_filter": "Excel (*.xlsx);;CSV (*.csv);;JSON (*.json)",
         "warning": "Avviso",

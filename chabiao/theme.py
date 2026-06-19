@@ -71,7 +71,9 @@ QComboBox {
     padding: 4px 8px; border: 1px solid #45475a; border-radius: 4px;
     background: #313244; min-width: 100px; color: #cdd6f4;
 }
-QComboBox QAbstractItemView { background: #313244; color: #cdd6f4; selection-background-color: #45475a; }
+QComboBox QAbstractItemView {  # noqa: E501
+    background: #313244; color: #cdd6f4; selection-background-color: #45475a;
+}
 QComboBox::drop-down { border: none; }
 QLineEdit {
     padding: 4px 8px; border: 1px solid #45475a; border-radius: 4px;

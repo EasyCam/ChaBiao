@@ -10,6 +10,8 @@
 - **交叉引用**：在一个表中搜索，提取列到另一个表（查表整合）
 - **多格式支持**：.xlsx, .xls, .csv, .tsv, .xlsm, .ods
 - **三种界面**：CLI 命令行、PySide6 GUI 桌面界面、FastAPI Web 界面
+- **10种语言**：🇨🇳 中文 · 🇺🇸 English · 🇯🇵 日本語 · 🇫🇷 Français · 🇷🇺 Русский · 🇩🇪 Deutsch · 🇪🇸 Español · 🇧🇷 Português · 🇮🇹 Italiano · 🇰🇷 한국어
+- **暗色主题**：Catppuccin 风格暗色主题，GUI 和 Web 均可切换
 - **数据聚合**：数据透视表、分组统计、分类汇总
 - **文件对比**：合并比较两个表格文件
 - **格式转换**：在 xlsx、csv、json、tsv 之间转换
@@ -77,7 +79,7 @@ chabiao spotlight data.xlsx --row 100 --column 价格
 ### Python API
 
 ```python
-from chabiao import open_file, filter_data, search_data, spotlight
+from chabiao import open_file, filter_data, search_data, spotlight_view
 
 # 打开表格文件
 result = open_file(input_path="data.xlsx")
@@ -93,7 +95,7 @@ result = search_data(input_path="data.xlsx", keyword="错误", columns=["消息"
 print(result.data["total_matches"])
 
 # 聚光灯查看行
-result = spotlight(input_path="data.xlsx", row=100, column="价格")
+result = spotlight_view(input_path="data.xlsx", row=100, column="价格")
 print(result.data["row_data"])       # 完整行数据
 print(result.data["column_stats"])   # 列统计信息
 ```
@@ -105,10 +107,11 @@ chabiao-gui
 ```
 
 功能特性：
-- 拖拽打开文件
+- 10种语言切换：菜单 → 视图 → 语言
+- 亮色/暗色主题切换：菜单 → 视图 → 主题
 - 即时列筛选下拉菜单（不卡顿！）
 - 聚光灯模式（F6）高亮行和列
-- 多 Sheet 标签页
+- 大文件分页显示（500行/页）
 - 复制选择到剪贴板（Ctrl+C）
 - 导出为 CSV/JSON/Excel
 
@@ -118,7 +121,7 @@ chabiao-gui
 chabiao-web
 ```
 
-在浏览器中打开 http://localhost:8900
+在浏览器中打开 http://localhost:8900，支持语言切换（`?lang=zh`）和暗色主题（`?theme=dark`）。
 
 ## 使用方法
 
@@ -156,7 +159,7 @@ chabiao-web
 | `--ge` / `--le` | 大于等于 / 小于等于 |
 | `--top-n` | 前 N 个值 |
 | `--bottom-n` | 后 N 个值 |
-| `--above-avg` | 高于平均值 |
+| `----above-avg` | 高于平均值 |
 | `--below-avg` | 低于平均值 |
 
 ## Agent 集成（OpenAI Function Calling）

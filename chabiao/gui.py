@@ -12,7 +12,7 @@ import pandas as pd
 from .__version__ import __version__
 from .core import SheetWorkbook, load_workbook
 from .i18n import SUPPORTED_LANGS, detect_system_lang, t
-from .theme import DARK_QSS, LIGHT_QSS, SPOTLIGHT_COLORS, THEMES
+from .theme import LIGHT_QSS, SPOTLIGHT_COLORS, THEMES
 
 _CONFIG_DIR = Path.home() / ".chabiao"
 _CONFIG_FILE = _CONFIG_DIR / "gui_config.json"
@@ -40,6 +40,7 @@ def _save_config(cfg: dict[str, Any]) -> None:
 def _import_pyside6():
     try:
         from PySide6 import QtCore, QtGui, QtWidgets
+
         return QtWidgets, QtCore, QtGui
     except ImportError:
         print("PySide6 is required for GUI mode. Install with: pip install chabiao[gui]")
@@ -68,6 +69,7 @@ class SpreadsheetModel:
 
     def set_filter(self, column: str, keyword: str, mode: str = "contains") -> int:
         from .filters import filter_column, search_keyword
+
         if not self.workbook:
             return 0
         wb = self.workbook
@@ -140,7 +142,6 @@ class ChaBiaoWindow:
         if not self.model.workbook:
             self.info_label.setText("")
         else:
-            info = self.model.workbook.info_dict()
             filtered = t("filtered_suffix", lang) if self.model.is_filtered else ""
             total = len(self.model.current_df) if self.model.current_df is not None else 0
             self.row_count_label.setText(t("rows_info", lang, total=total, filtered=filtered))
@@ -472,9 +473,7 @@ class ChaBiaoWindow:
             try:
                 info = self.model.load(path)
                 self.path_label.setText(f"📂 {Path(path).name}")
-                self.info_label.setText(
-                    f"{info['rows']} rows × {info['columns']} cols"
-                )
+                self.info_label.setText(f"{info['rows']} rows × {info['columns']} cols")
                 self._load_data_to_table(self.model.current_df)
                 self.window.statusBar().showMessage(t("loaded", lang, path=path))
             except Exception as e:
@@ -484,11 +483,15 @@ class ChaBiaoWindow:
         QtWidgets = self._QtWidgets
         lang = self._lang
         if self.model.current_df is None:
-            QtWidgets.QMessageBox.warning(self.window, t("warning", lang), t("no_data_export", lang))
+            QtWidgets.QMessageBox.warning(
+                self.window, t("warning", lang), t("no_data_export", lang)
+            )
             return
 
         path, _ = QtWidgets.QFileDialog.getSaveFileName(
-            self.window, t("export_dialog_title", lang), "",
+            self.window,
+            t("export_dialog_title", lang),
+            "",
             t("export_dialog_filter", lang),
         )
         if path:
@@ -497,9 +500,7 @@ class ChaBiaoWindow:
                 if path.endswith(".csv"):
                     df.to_csv(path, index=False)
                 elif path.endswith(".json"):
-                    Path(path).write_text(
-                        df.to_json(orient="records", force_ascii=False)
-                    )
+                    Path(path).write_text(df.to_json(orient="records", force_ascii=False))
                 else:
                     df.to_excel(path, index=False)
                 self.window.statusBar().showMessage(t("exported", lang, path=path))
