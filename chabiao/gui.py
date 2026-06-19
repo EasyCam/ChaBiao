@@ -1,7 +1,8 @@
-"""PySide6 GUI interface for ChaBiao — with i18n and theme support."""
+"""PySide6 GUI interface for ChaBiao — with i18n, theme, sorting, multi-sheet, charts."""
 
 from __future__ import annotations
 
+import argparse
 import json
 import sys
 from pathlib import Path
@@ -45,6 +46,15 @@ def _import_pyside6():
     except ImportError:
         print("PySide6 is required for GUI mode. Install with: pip install chabiao[gui]")
         sys.exit(1)
+
+
+def _try_import_pyqtgraph():
+    try:
+        import pyqtgraph
+
+        return pyqtgraph
+    except ImportError:
+        return None
 
 
 class SpreadsheetModel:
@@ -96,16 +106,21 @@ class SpreadsheetModel:
 
 
 class ChaBiaoWindow:
-    """Main application window for ChaBiao GUI with i18n and theme support."""
+    """Main application window for ChaBiao GUI."""
 
     def __init__(self) -> None:
         QtWidgets, QtCore, QtGui = _import_pyside6()
+        self._pg = _try_import_pyqtgraph()
 
         cfg = _load_config()
         self._lang = cfg.get("lang", detect_system_lang())
         self._theme = cfg.get("theme", "light")
 
-        self.app = QtWidgets.QApplication(sys.argv)
+        existing = QtWidgets.QApplication.instance()
+        if existing:
+            self.app = existing
+        else:
+            self.app = QtWidgets.QApplication(sys.argv)
         self._apply_theme()
 
         self.window = QtWidgets.QMainWindow()
@@ -120,6 +135,9 @@ class ChaBiaoWindow:
         self._spotlight_active = False
         self._current_page = 0
         self._page_size = PAGE_SIZE
+        self._sort_column = -1
+        self._sort_order = QtCore.Qt.SortOrder.AscendingOrder
+        self._loading_sheets = False
 
         self._setup_ui(QtWidgets, QtCore, QtGui)
         self._setup_menu(QtWidgets, QtGui)
@@ -138,17 +156,22 @@ class ChaBiaoWindow:
         self.spotlight_btn.setText(t("spotlight_btn", lang))
         self.result_label.setText("")
         self.window.statusBar().showMessage(t("status_ready", lang))
-
         if not self.model.workbook:
             self.info_label.setText("")
         else:
             filtered = t("filtered_suffix", lang) if self.model.is_filtered else ""
             total = len(self.model.current_df) if self.model.current_df is not None else 0
             self.row_count_label.setText(t("rows_info", lang, total=total, filtered=filtered))
-
         self._update_page_info()
         self._retranslate_menu()
         self._retranslate_context_menu_actions()
+        if (
+            self.model.workbook
+            and self.model.workbook.sheet_names
+            and len(self.model.workbook.sheet_names) > 1
+        ):
+            for i in range(self.sheet_tab.count()):
+                self.sheet_tab.setTabText(i, self.model.workbook.sheet_names[i])
 
     def _retranslate_menu(self) -> None:
         lang = self._lang
@@ -161,12 +184,10 @@ class ChaBiaoWindow:
         self._action_copy.setText(t("menu_copy", lang))
         self._action_select_all.setText(t("menu_select_all", lang))
         self._action_spotlight.setText(t("menu_spotlight", lang))
-
         self._menu_language.setTitle(t("menu_language", lang))
         self._menu_theme.setTitle(t("menu_theme", lang))
         self._action_theme_light.setText(t("menu_theme_light", lang))
         self._action_theme_dark.setText(t("menu_theme_dark", lang))
-
         self._update_theme_checkmarks()
         self._update_lang_checkmarks()
 
@@ -191,7 +212,7 @@ class ChaBiaoWindow:
         main_layout.setContentsMargins(8, 4, 8, 4)
         main_layout.setSpacing(4)
 
-        # --- Compact header: file info ---
+        # --- Compact header ---
         header = QtWidgets.QHBoxLayout()
         header.setSpacing(6)
         self.path_label = QtWidgets.QLabel(t("no_file", lang))
@@ -208,6 +229,13 @@ class ChaBiaoWindow:
         self.spotlight_btn.clicked.connect(self._toggle_spotlight)
         header.addWidget(self.spotlight_btn)
         main_layout.addLayout(header)
+
+        # --- Sheet tabs ---
+        self.sheet_tab = QtWidgets.QTabWidget()
+        self.sheet_tab.setFixedHeight(0)
+        self.sheet_tab.setVisible(False)
+        self.sheet_tab.currentChanged.connect(self._on_sheet_changed)
+        main_layout.addWidget(self.sheet_tab)
 
         # --- Filter bar ---
         filter_bar = QtWidgets.QHBoxLayout()
@@ -243,7 +271,7 @@ class ChaBiaoWindow:
         filter_bar.addWidget(self.result_label)
         main_layout.addLayout(filter_bar)
 
-        # --- Table (takes all remaining space) ---
+        # --- Table ---
         self.table = QtWidgets.QTableWidget()
         self.table.setAlternatingRowColors(True)
         self.table.setSortingEnabled(False)
@@ -253,6 +281,7 @@ class ChaBiaoWindow:
         self.table.verticalHeader().setVisible(False)
         self.table.horizontalHeader().setStretchLastSection(True)
         self.table.setSelectionBehavior(QtWidgets.QAbstractItemView.SelectionBehavior.SelectRows)
+        self.table.horizontalHeader().sectionClicked.connect(self._on_header_clicked)
         main_layout.addWidget(self.table, stretch=1)
 
         # --- Pagination bar ---
@@ -293,46 +322,45 @@ class ChaBiaoWindow:
         lang = self._lang
         menubar = self.window.menuBar()
 
-        # File menu
         self._menu_file = menubar.addMenu(t("menu_file", lang))
         self._action_open = QtGui.QAction(t("menu_open", lang), self.window)
         self._action_open.setShortcut("Ctrl+O")
         self._action_open.triggered.connect(self._open_file)
         self._menu_file.addAction(self._action_open)
-
         self._action_export = QtGui.QAction(t("menu_export", lang), self.window)
         self._action_export.setShortcut("Ctrl+E")
         self._action_export.triggered.connect(self._export_file)
         self._menu_file.addAction(self._action_export)
-
         self._menu_file.addSeparator()
         self._action_quit = QtGui.QAction(t("menu_quit", lang), self.window)
         self._action_quit.setShortcut("Ctrl+Q")
         self._action_quit.triggered.connect(self.window.close)
         self._menu_file.addAction(self._action_quit)
 
-        # Edit menu
         self._menu_edit = menubar.addMenu(t("menu_edit", lang))
         self._action_copy = QtGui.QAction(t("menu_copy", lang), self.window)
         self._action_copy.setShortcut("Ctrl+C")
         self._action_copy.triggered.connect(self._copy_selection)
         self._menu_edit.addAction(self._action_copy)
-
         self._action_select_all = QtGui.QAction(t("menu_select_all", lang), self.window)
         self._action_select_all.setShortcut("Ctrl+A")
         self._action_select_all.triggered.connect(self.table.selectAll)
         self._menu_edit.addAction(self._action_select_all)
 
-        # View menu
         self._menu_view = menubar.addMenu(t("menu_view", lang))
         self._action_spotlight = QtGui.QAction(t("menu_spotlight", lang), self.window)
         self._action_spotlight.setShortcut("F6")
         self._action_spotlight.triggered.connect(self._toggle_spotlight)
         self._menu_view.addAction(self._action_spotlight)
 
-        self._menu_view.addSeparator()
+        # Chart action (only if pyqtgraph available)
+        if self._pg is not None:
+            self._action_chart = QtGui.QAction("📊 Chart", self.window)
+            self._action_chart.setShortcut("F7")
+            self._action_chart.triggered.connect(self._show_chart)
+            self._menu_view.addAction(self._action_chart)
 
-        # Language submenu
+        self._menu_view.addSeparator()
         self._menu_language = self._menu_view.addMenu(t("menu_language", lang))
         self._lang_actions: dict[str, QtGui.QAction] = {}
         lang_group = QtGui.QActionGroup(self.window)
@@ -343,8 +371,6 @@ class ChaBiaoWindow:
             action.triggered.connect(lambda checked, c=code: self._switch_language(c))
             self._menu_language.addAction(action)
             self._lang_actions[code] = action
-
-        # Theme submenu
         self._menu_theme = self._menu_view.addMenu(t("menu_theme", lang))
         theme_group = QtGui.QActionGroup(self.window)
         self._action_theme_light = theme_group.addAction(t("menu_theme_light", lang))
@@ -352,18 +378,85 @@ class ChaBiaoWindow:
         self._action_theme_light.setChecked(self._theme == "light")
         self._action_theme_light.triggered.connect(lambda: self._switch_theme("light"))
         self._menu_theme.addAction(self._action_theme_light)
-
         self._action_theme_dark = theme_group.addAction(t("menu_theme_dark", lang))
         self._action_theme_dark.setCheckable(True)
         self._action_theme_dark.setChecked(self._theme == "dark")
         self._action_theme_dark.triggered.connect(lambda: self._switch_theme("dark"))
         self._menu_theme.addAction(self._action_theme_dark)
 
-        # Context menu actions (created once, retranslated on language switch)
         self._ctx_copy_action = QtGui.QAction(t("ctx_copy", lang), self.window)
         self._ctx_copy_action.triggered.connect(self._copy_selection)
         self._ctx_spotlight_action = QtGui.QAction(t("ctx_spotlight", lang), self.window)
         self._ctx_spotlight_action.triggered.connect(self._toggle_spotlight)
+
+    # --- Sorting ---
+    def _on_header_clicked(self, logical_index: int) -> None:
+        if self._sort_column == logical_index:
+            if self._sort_order == self._QtCore.Qt.SortOrder.AscendingOrder:
+                self._sort_order = self._QtCore.Qt.SortOrder.DescendingOrder
+            else:
+                self._sort_order = self._QtCore.Qt.SortOrder.AscendingOrder
+        else:
+            self._sort_column = logical_index
+            self._sort_order = self._QtCore.Qt.SortOrder.AscendingOrder
+        self.table.sortItems(logical_index, self._sort_order)
+
+    # --- Multi-sheet ---
+    def _on_sheet_changed(self, index: int) -> None:
+        if self._loading_sheets:
+            return
+        if not self.model.workbook or index < 0:
+            return
+        sheet_name = self.model.workbook.sheet_names[index]
+        try:
+            df = self.model.workbook.get_sheet(sheet_name)
+            self.model._full_df = df.copy()
+            self.model._filtered_df = None
+            self.model.clear_filter()
+            self.filter_keyword.clear()
+            self.result_label.setText("")
+            self._current_page = 0
+            self._sort_column = -1
+            self._load_data_to_table(self.model.current_df)
+            self.info_label.setText(f"{len(df)} rows × {len(df.columns)} cols")
+            self.window.statusBar().showMessage(f"Sheet: {sheet_name}")
+        except Exception as e:
+            self._QtWidgets.QMessageBox.warning(self.window, "Error", str(e))
+
+    # --- Chart ---
+    def _show_chart(self) -> None:
+        pg = self._pg
+        QtWidgets = self._QtWidgets
+        df = self.model.current_df
+        if df is None:
+            QtWidgets.QMessageBox.information(self.window, "Chart", "No data loaded")
+            return
+        numeric_cols = [c for c in df.columns if pd.api.types.is_numeric_dtype(df[c])]
+        if not numeric_cols:
+            QtWidgets.QMessageBox.information(self.window, "Chart", "No numeric columns found")
+            return
+        cols, ok = QtWidgets.QDialog.getItem(
+            self.window,
+            "Select Columns",
+            "Choose columns to plot (hold Ctrl for multi):",
+            numeric_cols,
+            0,
+            False,
+        )
+        if not ok or not cols:
+            return
+        selected = [cols]
+        chart_dialog = QtWidgets.QDialog(self.window)
+        chart_dialog.setWindowTitle(f"Chart: {cols}")
+        chart_dialog.resize(900, 500)
+        layout = QtWidgets.QVBoxLayout(chart_dialog)
+        pw = pg.plot()
+        layout.addWidget(pw)
+        for col in selected:
+            pw.plot(df[col].dropna().values, pen=pg.mkPen(width=2), name=col)
+        pw.setLabel("left", cols)
+        pw.setLabel("bottom", "Index")
+        chart_dialog.exec()
 
     def _switch_language(self, code: str) -> None:
         self._lang = code
@@ -438,11 +531,9 @@ class ChaBiaoWindow:
     def _load_page_to_table(self, df: pd.DataFrame) -> None:
         QtWidgets = self._QtWidgets
         QtCore = self._QtCore
-
         self.table.setRowCount(len(df))
         self.table.setColumnCount(len(df.columns))
         self.table.setHorizontalHeaderLabels(list(df.columns))
-
         df_reset = df.reset_index(drop=True)
         for i, col in enumerate(df_reset.columns):
             for j in range(len(df_reset)):
@@ -451,14 +542,30 @@ class ChaBiaoWindow:
                 item = QtWidgets.QTableWidgetItem(text)
                 item.setFlags(item.flags() & ~QtCore.Qt.ItemFlag.ItemIsEditable)
                 self.table.setItem(j, i, item)
-
         self.table.resizeColumnsToContents()
         self.filter_column.clear()
         self.filter_column.addItems(list(df.columns))
 
     def _load_data_to_table(self, df: pd.DataFrame) -> None:
         self._current_page = 0
+        self._sort_column = -1
         self._refresh_table()
+        # Update sheet tabs
+        if self.model.workbook and len(self.model.workbook.sheet_names) > 1:
+            self._loading_sheets = True
+            self.sheet_tab.clear()
+            self.sheet_tab.setFixedHeight(32)
+            self.sheet_tab.setVisible(True)
+            for name in self.model.workbook.sheet_names:
+                tab_widget = self._QtWidgets.QWidget()
+                self.sheet_tab.addTab(tab_widget, name)
+            active_idx = self.model.workbook.sheet_names.index(self.model.workbook.active_sheet)
+            self.sheet_tab.setCurrentIndex(active_idx)
+            self._loading_sheets = False
+        else:
+            self.sheet_tab.clear()
+            self.sheet_tab.setFixedHeight(0)
+            self.sheet_tab.setVisible(False)
 
     def _open_file(self) -> None:
         QtWidgets = self._QtWidgets
@@ -487,7 +594,6 @@ class ChaBiaoWindow:
                 self.window, t("warning", lang), t("no_data_export", lang)
             )
             return
-
         path, _ = QtWidgets.QFileDialog.getSaveFileName(
             self.window,
             t("export_dialog_title", lang),
@@ -607,7 +713,19 @@ class ChaBiaoWindow:
 
 
 def main() -> None:
+    parser = argparse.ArgumentParser(description="ChaBiao GUI")
+    parser.add_argument("file", nargs="?", default=None, help="Spreadsheet file to open")
+    args = parser.parse_args()
     window = ChaBiaoWindow()
+    if args.file:
+        try:
+            info = window.model.load(args.file)
+            window.path_label.setText(f"📂 {Path(args.file).name}")
+            window.info_label.setText(f"{info['rows']} rows × {info['columns']} cols")
+            window._load_data_to_table(window.model.current_df)
+            window.window.statusBar().showMessage(t("loaded", window._lang, path=args.file))
+        except Exception as e:
+            window._QtWidgets.QMessageBox.critical(window.window, t("error", window._lang), str(e))
     window.run()
 
 

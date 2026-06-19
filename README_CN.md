@@ -2,21 +2,27 @@
 
 ⚡ 专为大型 Excel 文件（15MB+，2万行+）打造的极速表格查看、筛选和处理工具。Excel 筛选下拉菜单再也不卡了！
 
-![ChaBiao GUI 截图](images/ScreenShot.png)
+![ChaBiao GUI — 亮色主题](images/gui_light_data.png)
+![ChaBiao GUI — 暗色主题](images/gui_dark_zh.png)
 
 ## 功能特性
 
 - **极速筛选**：列筛选瞬间响应，不再等待 Excel 筛选下拉菜单加载
 - **关键词搜索**：跨列全文搜索，支持正则表达式
 - **聚光灯/焦点单元格**：高亮当前行和列，方便阅读（等同 Excel 聚光灯功能）
+![ChaBiao GUI — 聚光灯](images/gui_light_spotlight.png)
+- **多工作表标签页**：标签页切换工作表（单工作表时自动隐藏）
+- **列排序**：点击列标题头升序/降序排列
 - **交叉引用**：在一个表中搜索，提取列到另一个表（查表整合）
+- **数据图表**：可选 pyqtgraph 可视化图表（需安装 pyqtgraph）
 - **多格式支持**：.xlsx, .xls, .csv, .tsv, .xlsm, .ods
 - **三种界面**：CLI 命令行、PySide6 GUI 桌面界面、FastAPI Web 界面
 - **10种语言**：🇨🇳 中文 · 🇺🇸 English · 🇯🇵 日本語 · 🇫🇷 Français · 🇷🇺 Русский · 🇩🇪 Deutsch · 🇪🇸 Español · 🇧🇷 Português · 🇮🇹 Italiano · 🇰🇷 한국어
 - **暗色主题**：Catppuccin 风格暗色主题，GUI 和 Web 均可切换
+- **分页显示**：500行/页，大文件滚动流畅
 - **数据聚合**：数据透视表、分组统计、分类汇总
 - **文件对比**：合并比较两个表格文件
-- **格式转换**：在 xlsx、csv、json、tsv 之间转换
+- **格式转换**：在 xlsx、csv、json、tsv 之间转换，Web 导出支持分页
 - **Agent 集成**：OpenAI function-calling 工具定义，支持 AI Agent 调用
 
 ## 系统要求
@@ -28,6 +34,7 @@
 
 可选依赖：
 - PySide6 >= 6.5（GUI 界面）
+- pyqtgraph >= 0.13（图表功能，可选）
 - FastAPI + uvicorn（Web 界面）
 
 ## 安装
@@ -36,7 +43,7 @@
 # 基础安装（仅 CLI）
 pip install chabiao
 
-# 安装 GUI 支持
+# 安装 GUI 支持（包含 pyqtgraph 图表）
 pip install chabiao[gui]
 
 # 安装 Web 支持
@@ -58,15 +65,15 @@ pip install chabiao[dev]
 chabiao open data.xlsx
 
 # 按列筛选 - 各种条件
-chabiao filter data.xlsx --column City --contains 北京
-chabiao filter data.xlsx --column 价格 --gt 100 --lt 500
-chabiao filter data.xlsx --column 销售额 --top-n 10
+chabiao filter data.xlsx --column City --contains Beijing
+chabiao filter data.xlsx --column Price --gt 100 --lt 500
+chabiao filter data.xlsx --column Sales --top-n 10
 
 # 跨列搜索关键词
-chabiao search data.xlsx --keyword 错误 --columns 消息,级别
+chabiao search data.xlsx --keyword error --columns Message,Level
 
 # 数据聚合（类似 Excel 数据透视表）
-chabiao aggregate data.xlsx --group-by 城市 --agg 销售额:sum --agg 价格:mean
+chabiao aggregate data.xlsx --group-by City --agg Sales:sum --agg Price:mean
 
 # 比较/合并两个文件
 chabiao compare data1.xlsx data2.xlsx --on ID --how left
@@ -75,7 +82,7 @@ chabiao compare data1.xlsx data2.xlsx --on ID --how left
 chabiao export data.xlsx -o output.csv --format csv
 
 # 聚光灯查看特定行
-chabiao spotlight data.xlsx --row 100 --column 价格
+chabiao spotlight data.xlsx --row 100 --column Price
 ```
 
 ### Python API
@@ -105,16 +112,25 @@ print(result.data["column_stats"])   # 列统计信息
 ### GUI 桌面界面
 
 ```bash
+# 启动 GUI
 chabiao-gui
+
+# 直接打开文件
+chabiao-gui data.xlsx
 ```
 
-![ChaBiao GUI](images/ScreenShot.png)
+![ChaBiao GUI — 筛选](images/gui_light_filter.png)
+![ChaBiao GUI — 多工作表](images/gui_light_multisheet.png)
 
 功能特性：
+- 命令行直接打开文件：`chabiao-gui data.xlsx`
 - 10种语言切换：菜单 → 视图 → 语言
 - 亮色/暗色主题切换：菜单 → 视图 → 主题
-- 即时列筛选下拉菜单（不卡顿！）
+- 即时列筛选（contains/equals/regex/search）
 - 聚光灯模式（F6）高亮行和列
+- 点击列标题排序
+- 多工作表标签页切换
+- 图表可视化（F7，需安装 pyqtgraph）
 - 大文件分页显示（500行/页）
 - 复制选择到剪贴板（Ctrl+C）
 - 导出为 CSV/JSON/Excel
@@ -125,7 +141,7 @@ chabiao-gui
 chabiao-web
 ```
 
-在浏览器中打开 http://localhost:8900，支持语言切换（`?lang=zh`）和暗色主题（`?theme=dark`）。
+在浏览器中打开 http://localhost:8900，支持语言切换（`?lang=zh`）和暗色主题（`?theme=dark`）。Web 导出支持分页参数 `?start=0&limit=1000` 处理大数据集。
 
 ## 使用方法
 
@@ -163,7 +179,7 @@ chabiao-web
 | `--ge` / `--le` | 大于等于 / 小于等于 |
 | `--top-n` | 前 N 个值 |
 | `--bottom-n` | 后 N 个值 |
-| `----above-avg` | 高于平均值 |
+| `--above-avg` | 高于平均值 |
 | `--below-avg` | 低于平均值 |
 
 ## Agent 集成（OpenAI Function Calling）

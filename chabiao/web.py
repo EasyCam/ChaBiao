@@ -447,6 +447,8 @@ def create_app():
         format: str = "csv",
         columns: str | None = None,
         sheet: str | None = None,
+        start: int = 0,
+        limit: int | None = None,
     ):
         wb = _workbooks.get(file_id)
         if not wb:
@@ -456,6 +458,10 @@ def create_app():
         if columns:
             cols = [c.strip() for c in columns.split(",")]
             df = df[[c for c in cols if c in df.columns]]
+        if start > 0:
+            df = df.iloc[start:]
+        if limit is not None and limit > 0:
+            df = df.head(limit)
 
         buf = io.StringIO()
         if format == "csv":

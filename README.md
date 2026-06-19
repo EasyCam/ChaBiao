@@ -2,21 +2,27 @@
 
 ⚡ Lightning-fast spreadsheet viewer, filter and processor. Built for large Excel files (15MB+, 20K+ rows) that make Excel choke on filter dropdowns.
 
-![ChaBiao GUI Screenshot](images/ScreenShot.png)
+![ChaBiao GUI — Light Theme](images/gui_light_data.png)
+![ChaBiao GUI — Dark Theme](images/gui_dark_zh.png)
 
 ## Features
 
-- **Fast Filtering**: Instant column filtering - no more waiting for Excel's filter dropdown to load
+- **Fast Filtering**: Instant column filtering - no more waiting for Excel's filter dropdowns
 - **Keyword Search**: Full-text search across all columns with regex support
 - **Spotlight / Focus Cell**: Highlight active row and column for easy reading (聚光灯功能)
+![ChaBiao GUI — Spotlight](images/gui_light_spotlight.png)
+- **Multi-Sheet Tabs**: Switch between sheets with tab widget (auto-hidden for single-sheet files)
+- **Column Sorting**: Click column headers to sort ascending/descending
 - **Cross-Reference**: Search in one table, extract columns to another (查表整合)
-- **Multi-format**: Support .xlsx, .xls, .csv, .tsv, .xlsm, .ods
+- **Data Charts**: Optional pyqtgraph chart visualization for numeric columns
+- **Multi-format**: .xlsx, .xls, .csv, .tsv, .xlsm, .ods
 - **Three Interfaces**: CLI, PySide6 GUI, and Web (FastAPI)
 - **10 Languages**: 🇨🇳 中文 · 🇺🇸 English · 🇯🇵 日本語 · 🇫🇷 Français · 🇷🇺 Русский · 🇩🇪 Deutsch · 🇪🇸 Español · 🇧🇷 Português · 🇮🇹 Italiano · 🇰🇷 한국어
 - **Dark Theme**: Catppuccin-inspired dark theme for GUI and Web
+- **Pagination**: 500 rows/page for smooth scrolling on large files
 - **Data Aggregation**: Pivot tables, group-by, subtotals
 - **File Comparison**: Merge and compare two spreadsheet files
-- **Export**: Convert between formats (xlsx, csv, json, tsv)
+- **Export**: Convert between formats (xlsx, csv, json, tsv), web export with pagination
 - **Agent Integration**: OpenAI function-calling tools for AI agents
 
 ## Requirements
@@ -28,6 +34,7 @@
 
 Optional:
 - PySide6 >= 6.5 (for GUI)
+- pyqtgraph >= 0.13 (for charts, optional)
 - FastAPI + uvicorn (for Web)
 
 ## Installation
@@ -36,7 +43,7 @@ Optional:
 # Basic (CLI only)
 pip install chabiao
 
-# With GUI support
+# With GUI support (includes pyqtgraph for charts)
 pip install chabiao[gui]
 
 # With Web support
@@ -105,18 +112,25 @@ print(result.data["column_stats"])   # Column statistics
 ### GUI
 
 ```bash
+# Launch GUI
 chabiao-gui
-# or
-python -m chabiao --gui
+
+# Or open a file directly
+chabiao-gui data.xlsx
 ```
 
-![ChaBiao GUI](images/ScreenShot.png)
+![ChaBiao GUI — Filter](images/gui_light_filter.png)
+![ChaBiao GUI — Multi-Sheet](images/gui_light_multisheet.png)
 
 Features:
+- Open file from command line: `chabiao-gui data.xlsx`
 - Multi-language support (10 languages): View → Language
 - Light/Dark theme switching: View → Theme
-- Instant column filter dropdown (no lag!)
+- Instant column filter (contains/equals/regex/search)
 - Spotlight mode (F6) to highlight rows and columns
+- Column sorting by clicking headers
+- Multi-sheet tab switching
+- Chart visualization (F7, requires pyqtgraph)
 - Pagination for large files (500 rows/page)
 - Copy selection to clipboard (Ctrl+C)
 - Export to CSV/JSON/Excel
@@ -129,7 +143,7 @@ chabiao-web
 python -m chabiao --web
 ```
 
-Open http://localhost:8900 in your browser. Supports language (`?lang=zh`) and theme (`?theme=dark`) URL parameters.
+Open http://localhost:8900 in your browser. Supports language (`?lang=zh`) and theme (`?theme=dark`) URL parameters. Web export supports pagination with `?start=0&limit=1000` for large datasets.
 
 ## Usage
 
