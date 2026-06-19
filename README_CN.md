@@ -2,6 +2,8 @@
 
 ⚡ 专为大型 Excel 文件（15MB+，2万行+）打造的极速表格查看、筛选和处理工具。Excel 筛选下拉菜单再也不卡了！
 
+![ChaBiao GUI 截图](images/ScreenShot.png)
+
 ## 功能特性
 
 - **极速筛选**：列筛选瞬间响应，不再等待 Excel 筛选下拉菜单加载
@@ -105,6 +107,8 @@ print(result.data["column_stats"])   # 列统计信息
 ```bash
 chabiao-gui
 ```
+
+![ChaBiao GUI](images/ScreenShot.png)
 
 功能特性：
 - 10种语言切换：菜单 → 视图 → 语言

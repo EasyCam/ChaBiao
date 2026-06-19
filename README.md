@@ -2,6 +2,8 @@
 
 ⚡ Lightning-fast spreadsheet viewer, filter and processor. Built for large Excel files (15MB+, 20K+ rows) that make Excel choke on filter dropdowns.
 
+![ChaBiao GUI Screenshot](images/ScreenShot.png)
+
 ## Features
 
 - **Fast Filtering**: Instant column filtering - no more waiting for Excel's filter dropdown to load
@@ -107,6 +109,8 @@ chabiao-gui
 # or
 python -m chabiao --gui
 ```
+
+![ChaBiao GUI](images/ScreenShot.png)
 
 Features:
 - Multi-language support (10 languages): View → Language
