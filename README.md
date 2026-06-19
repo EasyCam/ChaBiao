@@ -115,8 +115,14 @@ print(result.data["column_stats"])   # Column statistics
 # Launch GUI
 chabiao-gui
 
-# Or open a file directly
+# Open a file directly
 chabiao-gui data.xlsx
+
+# Open with dark theme and Chinese
+chabiao-gui data.xlsx --theme dark --lang zh
+
+# Custom page size
+chabiao-gui data.xlsx --page-size 200
 ```
 
 ![ChaBiao GUI — Filter](images/gui_light_filter.png)
@@ -124,6 +130,7 @@ chabiao-gui data.xlsx
 
 Features:
 - Open file from command line: `chabiao-gui data.xlsx`
+- CLI options: `--lang zh --theme dark --page-size 200`
 - Multi-language support (10 languages): View → Language
 - Light/Dark theme switching: View → Theme
 - Instant column filter (contains/equals/regex/search)

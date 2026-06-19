@@ -713,10 +713,36 @@ class ChaBiaoWindow:
 
 
 def main() -> None:
+    from .i18n import SUPPORTED_LANGS
+
     parser = argparse.ArgumentParser(description="ChaBiao GUI")
     parser.add_argument("file", nargs="?", default=None, help="Spreadsheet file to open")
+    parser.add_argument(
+        "--lang",
+        choices=list(SUPPORTED_LANGS.keys()),
+        default=None,
+        help="Interface language (zh, en, ja, fr, ru, de, es, pt, it, ko)",
+    )
+    parser.add_argument(
+        "--theme", choices=["light", "dark"], default=None, help="Color theme (light or dark)"
+    )
+    parser.add_argument("--page-size", type=int, default=None, help="Rows per page (default: 500)")
     args = parser.parse_args()
+
+    cfg = _load_config()
+    if args.lang:
+        cfg["lang"] = args.lang
+    if args.theme:
+        cfg["theme"] = args.theme
+    _save_config(cfg)
+
     window = ChaBiaoWindow()
+    if args.lang:
+        window._switch_language(args.lang)
+    if args.theme:
+        window._switch_theme(args.theme)
+    if args.page_size:
+        window._page_size = args.page_size
     if args.file:
         try:
             info = window.model.load(args.file)

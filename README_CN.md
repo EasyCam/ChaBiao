@@ -117,6 +117,12 @@ chabiao-gui
 
 # 直接打开文件
 chabiao-gui data.xlsx
+
+# 指定暗色主题和中文
+chabiao-gui data.xlsx --theme dark --lang zh
+
+# 自定义每页行数
+chabiao-gui data.xlsx --page-size 200
 ```
 
 ![ChaBiao GUI — 筛选](images/gui_light_filter.png)
@@ -124,6 +130,7 @@ chabiao-gui data.xlsx
 
 功能特性：
 - 命令行直接打开文件：`chabiao-gui data.xlsx`
+- 命令行选项：`--lang zh --theme dark --page-size 200`
 - 10种语言切换：菜单 → 视图 → 语言
 - 亮色/暗色主题切换：菜单 → 视图 → 主题
 - 即时列筛选（contains/equals/regex/search）

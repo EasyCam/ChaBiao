@@ -1,0 +1,7 @@
+path: /tmp/chabiao_demo.xlsx
+format: .xlsx
+sheet_names: ["Employees", "Products", "Finance"]
+active_sheet: Employees
+shape: (2000, 6)
+version: 0.4.0
+info: {"rows": 2000, "columns": 6, "column_names": ["Name", "Department", "Salary", "City", "Age", "Performance"], "dtypes": {"Name": "str", "Department": "str", "Salary": "int64", "City": "str", "Age": "int64", "Performance": "str"}, "null_counts": {"Name": 0, "Department": 0, "Salary": 0, "City": 0, "Age": 0, "Performance": 0}, "memory_mb": 0.14560222625732422}

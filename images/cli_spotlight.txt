@@ -1,0 +1,3 @@
+cell: {"row": 5, "column": "Salary", "value": "104696"}
+row_context: [{"Salary": 53711}, {"Salary": 121658}, {"Salary": 87993}, {"Salary": 104696}, {"Salary": 57213}, {"Salary": 145788}, {"Salary": 134956}]
+column_info: {"dtype": "int64", "unique_count": 1988, "mean": 88500.274, "sum": 177000548.0, "min": 30138.0, "max": 149979.0, "count_above": 720, "count_below": 1279}
